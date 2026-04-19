@@ -40,12 +40,19 @@ abstract class BaseViewModel<T> : ViewModel() {
     private val _uiState = MutableStateFlow<UiState<T>>(UiState.Loading)
     val uiState: StateFlow<UiState<T>> = _uiState.asStateFlow()
 
+    protected fun updateState(state: UiState<T>) {
+        _uiState.value = state
+    }
+
     protected fun execute(flow: Flow<ResponseHandler<T>>) {
         viewModelScope.launch {
             flow.collect { response ->
                 _uiState.value = when (response) {
                     is ResponseHandler.Loading -> UiState.Loading
-                    is ResponseHandler.Success -> UiState.Success(response.result!!)
+                    is ResponseHandler.Success -> {
+                        val data = response.result
+                        if (data != null) UiState.Success(data) else UiState.Empty
+                    }
                     is ResponseHandler.Error -> UiState.Error(response.apiError?.error?.message ?: "Unknown error")
                     is ResponseHandler.Failure -> UiState.Error(response.exception?.message ?: "Unknown error")
                 }
@@ -57,7 +64,11 @@ abstract class BaseViewModel<T> : ViewModel() {
 }
 ```
 
+**ViewModels without a single data type** (e.g., coordinator screens like `MainScreenViewModel`) should extend `ViewModel()` directly and manage their own state. `BaseViewModel<T>` is for the common case of a screen driven by a single data-fetching operation. This is intentional — not every ViewModel needs to fit the same mold.
+
 Screen-local UI state (e.g., `selectedUser`) remains as separate `MutableStateFlow` in the ViewModel — only data-fetching lifecycle state is unified.
+
+**Multiple `Success` emissions:** When a repository emits cached data first and then fresh data, `execute()` will update `UiState.Success` twice. The `StateFlow` simply replaces the value. This is the intended behavior — screens re-render with fresh data seamlessly. If a project needs to distinguish cached vs. fresh, it can extend `UiState` with a `stale` flag.
 
 Screens consume via single `when` block:
 
@@ -168,6 +179,10 @@ install(Auth) {
 
 **Navigation-level auth gating** — `AppNavigation` observes `authState` to redirect unauthenticated users. Wiring included, no login screen.
 
+### iOS Token Security
+
+The existing iOS `EncryptionService` is a no-op placeholder. For the auth plumbing to be secure on both platforms, the iOS implementation must use the **iOS Keychain** via `expect/actual`. The `EncryptionService` on iOS will be updated to wrap Keychain read/write operations (using `Security` framework's `SecItemAdd`/`SecItemCopyMatching`). This ensures tokens are stored securely on both platforms.
+
 ### What's NOT included (each project provides)
 
 - Login/register UI screens
@@ -249,6 +264,13 @@ fun <T> BaseContent(
 | Coil 3 | KMP-native image loading |
 | SKIE (Touchlab) | Swift/Flow interop — bridges Flows to async/await |
 | Room KMP | Local database |
+| KSP (Kotlin Symbol Processing) | Required by Room KMP for annotation processing of `@Dao`, `@Entity`, `@Database` |
+
+### Build Configuration Notes
+
+- **KSP plugin** must be added to `composeApp/build.gradle.kts` for Room annotation processing.
+- **SKIE** is a Gradle plugin applied at the project level. It automatically processes all public Kotlin Flows exposed to iOS, converting them to Swift async/await sequences. No per-flow configuration needed — it's project-wide.
+- **Koin Compiler Plugin** has full KMP support as of Koin 4.x. Works for all targets including iOS. Requires KSP.
 
 ### Removals
 
@@ -267,7 +289,22 @@ fun <T> BaseContent(
 
 ---
 
-## 6. Project Structure
+## 6. Migration: `enqueue()` → `RemoteDataSource`
+
+The existing `NetworkExtensions.kt` contains a top-level `enqueue<T>()` function that manually constructs requests, attaches auth headers, and returns `Flow<ResponseHandler<T>>`. This is the most significant refactor in the migration.
+
+**What changes:**
+- **Auth headers** move from `enqueue()` to Ktor's `Auth` plugin (installed in `NetworkClient.kt`). The manual `Authorization` header injection is removed.
+- **Device headers** (UDID, OS, etc.) move to Ktor's `DefaultRequest` plugin, configured once in `NetworkClient.kt`.
+- **`enqueue<T>()`** is simplified: it no longer handles auth or device headers. It becomes a thin wrapper that makes the HTTP call and maps the response to `ResponseHandler<T>`.
+- **`RemoteDataSource`** wraps `ApiService` calls and exposes typed methods (e.g., `getUsers(): Flow<ResponseHandler<List<User>>>`). ViewModels no longer call `ApiService` directly.
+- **`ApiService`** is refactored to use the simplified `enqueue()` — it only defines endpoints and HTTP methods.
+
+**Migration path:** `NetworkExtensions.kt` stays but is simplified. `RemoteDataSource` is a new layer on top of `ApiService`. No existing function signatures break — the change is additive at the data source level and subtractive at the network extension level.
+
+---
+
+## 7. Project Structure (package: `com.kaelmoreno.compose.composemultiplatformbase`)
 
 ```
 composeApp/src/commonMain/kotlin/.../
@@ -341,7 +378,8 @@ composeApp/src/commonMain/kotlin/.../
 └── platform/
     ├── Platform.kt
     ├── DataStoreFactory.kt
-    └── DatabaseFactory.kt
+    ├── DatabaseFactory.kt                 -- expect/actual for Room builder
+    └── EncryptionService.kt               -- expect/actual (Android: AES/KeyStore, iOS: Keychain)
 ```
 
 ### Testing Structure
@@ -360,9 +398,18 @@ composeApp/src/commonTest/kotlin/.../
 
 Fakes preferred over mocks — work on all platforms without code generation.
 
+### Testing Infrastructure
+
+The template provides shared test utilities:
+
+- **`TestDispatcherRule`** — Sets `Dispatchers.Main` to `UnconfinedTestDispatcher` for ViewModel tests. Applied via `@BeforeTest`/`@AfterTest`.
+- **Room in-memory database** — Test helper to create `AppDatabase` with `inMemoryDatabaseBuilder()` for DAO tests. Torn down after each test.
+- **Turbine for Flow testing** — All `StateFlow`/`Flow` assertions use Turbine's `test { }` block. No manual `collect` or `delay` in tests.
+- **Fakes** — `FakeApiService`, `FakeUserDao`, `FakeAuthManager` provided as starting points. Each implements the real interface with in-memory data.
+
 ---
 
-## 7. Sample Feature Flow (End-to-End)
+## 8. Sample Feature Flow (End-to-End)
 
 Every feature follows this pattern:
 
