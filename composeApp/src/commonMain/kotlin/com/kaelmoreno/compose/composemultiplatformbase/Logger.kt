@@ -1,35 +1,35 @@
 package com.kaelmoreno.compose.composemultiplatformbase
 
-import io.github.aakira.napier.DebugAntilog
-import io.github.aakira.napier.Napier
+import co.touchlab.kermit.Logger as KermitLogger
 
-/**
- * Multiplatform logger utility using Napier
- */
 object Logger {
 
     fun initialize() {
-        // Initialize Napier with DebugAntilog for debug builds
-        Napier.base(DebugAntilog())
+        // Kermit initializes automatically with default config
+        KermitLogger.setTag("App")
     }
 
     fun d(message: String, tag: String? = null) {
-        Napier.d(message, tag = tag)
+        KermitLogger.d(tag ?: "App") { message }
     }
 
     fun i(message: String, tag: String? = null) {
-        Napier.i(message, tag = tag)
+        KermitLogger.i(tag ?: "App") { message }
     }
 
     fun w(message: String, tag: String? = null) {
-        Napier.w(message, tag = tag)
+        KermitLogger.w(tag ?: "App") { message }
     }
 
     fun e(message: String, throwable: Throwable? = null, tag: String? = null) {
-        Napier.e(message, throwable, tag = tag)
+        if (throwable != null) {
+            KermitLogger.e(tag ?: "App", throwable) { message }
+        } else {
+            KermitLogger.e(tag ?: "App") { message }
+        }
     }
 
     fun v(message: String, tag: String? = null) {
-        Napier.v(message, tag = tag)
+        KermitLogger.v(tag ?: "App") { message }
     }
 }

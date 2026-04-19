@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun LoadingContent(
-    itemLoading: String
+    message: String = "Loading..."
 ) {
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -25,7 +25,7 @@ fun LoadingContent(
         ) {
             CircularProgressIndicator()
             Spacer(modifier = Modifier.height(16.dp))
-            Text("Loading $itemLoading...")
+            Text(message)
         }
     }
 }
