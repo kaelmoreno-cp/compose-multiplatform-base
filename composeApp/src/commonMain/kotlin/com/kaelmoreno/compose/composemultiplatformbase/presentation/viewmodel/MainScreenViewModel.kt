@@ -2,10 +2,9 @@ package com.kaelmoreno.compose.composemultiplatformbase.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.kaelmoreno.compose.composemultiplatformbase.data.repository.DataStoreRepository
-import com.kaelmoreno.compose.composemultiplatformbase.data.model.User
 import com.kaelmoreno.compose.composemultiplatformbase.Logger
-import com.kaelmoreno.compose.composemultiplatformbase.data.repository.EncryptedDataStoreRepository
+import com.kaelmoreno.compose.composemultiplatformbase.data.local.preferences.EncryptedDataStoreRepository
+import com.kaelmoreno.compose.composemultiplatformbase.data.network.model.User
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,21 +34,18 @@ class MainScreenViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
-                val dataStoreToken = dataStoreRepository.getUserToken()
-                val dataStoreUserName = dataStoreRepository.getUserName()
-                val dataStoreUser = dataStoreRepository.getUser()
-
-                val hasDataStoreData = dataStoreToken != null || dataStoreUserName != null || dataStoreUser != null
+                val token = dataStoreRepository.getUserToken()
+                val userName = dataStoreRepository.getUserName()
+                val user = dataStoreRepository.getUser()
+                val hasData = token != null || userName != null || user != null
 
                 _uiState.value = _uiState.value.copy(
-                    savedToken = dataStoreToken,
-                    savedUserName = dataStoreUserName,
-                    savedUser = dataStoreUser,
+                    savedToken = token,
+                    savedUserName = userName,
+                    savedUser = user,
                     isLoading = false,
-                    message = if (hasDataStoreData) "Data loaded from DataStore" else "No stored data found"
+                    message = if (hasData) "Data loaded from DataStore" else "No stored data found"
                 )
-
-                Logger.d("Loaded data - Token: ${dataStoreToken != null}, UserName: ${dataStoreUserName != null}, User JSON: ${dataStoreUser != null}", "MainScreenViewModel")
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -66,26 +62,16 @@ class MainScreenViewModel(
             try {
                 val demoToken = "datastore_token_${Random.nextLong()}"
                 val success = dataStoreRepository.saveUserToken(demoToken)
-
-                if (success) {
-                    _uiState.value = _uiState.value.copy(
-                        savedToken = demoToken,
-                        isLoading = false,
-                        message = "String saved successfully using DataStore!"
-                    )
-                    Logger.d("String saved using DataStore", "MainScreenViewModel")
-                } else {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        message = "Failed to save string using DataStore"
-                    )
-                }
+                _uiState.value = _uiState.value.copy(
+                    savedToken = if (success) demoToken else _uiState.value.savedToken,
+                    isLoading = false,
+                    message = if (success) "Token saved successfully!" else "Failed to save token"
+                )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    message = "Error saving string: ${e.message}"
+                    message = "Error: ${e.message}"
                 )
-                Logger.e("Error saving string", e, "MainScreenViewModel")
             }
         }
     }
@@ -96,26 +82,16 @@ class MainScreenViewModel(
             try {
                 val demoUserName = "datastore_user_${Random.nextInt(1000)}"
                 val success = dataStoreRepository.saveUserName(demoUserName)
-
-                if (success) {
-                    _uiState.value = _uiState.value.copy(
-                        savedUserName = demoUserName,
-                        isLoading = false,
-                        message = "User name saved successfully using DataStore!"
-                    )
-                    Logger.d("User name saved using DataStore", "MainScreenViewModel")
-                } else {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        message = "Failed to save user name using DataStore"
-                    )
-                }
+                _uiState.value = _uiState.value.copy(
+                    savedUserName = if (success) demoUserName else _uiState.value.savedUserName,
+                    isLoading = false,
+                    message = if (success) "User name saved!" else "Failed to save user name"
+                )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    message = "Error saving user name: ${e.message}"
+                    message = "Error: ${e.message}"
                 )
-                Logger.e("Error saving user name", e, "MainScreenViewModel")
             }
         }
     }
@@ -128,34 +104,20 @@ class MainScreenViewModel(
                     id = Random.nextInt(1000),
                     name = "John Doe ${Random.nextInt(100)}",
                     phone = "+1${Random.nextLong(1000000000, 9999999999)}",
-                    username = null,
-                    email = null,
-                    address = null,
-                    website = null,
-                    company = null
+                    username = null, email = null, address = null,
+                    website = null, company = null
                 )
-
                 val success = dataStoreRepository.saveUser(demoUser)
-
-                if (success) {
-                    _uiState.value = _uiState.value.copy(
-                        savedUser = demoUser,
-                        isLoading = false,
-                        message = "User JSON saved successfully using DataStore!"
-                    )
-                    Logger.d("User JSON saved using DataStore: $demoUser", "MainScreenViewModel")
-                } else {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        message = "Failed to save user JSON using DataStore"
-                    )
-                }
+                _uiState.value = _uiState.value.copy(
+                    savedUser = if (success) demoUser else _uiState.value.savedUser,
+                    isLoading = false,
+                    message = if (success) "User JSON saved!" else "Failed to save user JSON"
+                )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    message = "Error saving user JSON: ${e.message}"
+                    message = "Error: ${e.message}"
                 )
-                Logger.e("Error saving user JSON", e, "MainScreenViewModel")
             }
         }
     }
@@ -165,28 +127,19 @@ class MainScreenViewModel(
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
                 val success = dataStoreRepository.clearAllData()
-
                 if (success) {
-                    _uiState.value = _uiState.value.copy(
-                        savedToken = null,
-                        savedUserName = null,
-                        savedUser = null,
-                        isLoading = false,
-                        message = "All data cleared successfully using DataStore!"
-                    )
-                    Logger.d("All data cleared using DataStore", "MainScreenViewModel")
+                    _uiState.value = MainScreenUiState(message = "All data cleared!")
                 } else {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        message = "Failed to clear data using DataStore"
+                        message = "Failed to clear data"
                     )
                 }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    message = "Error clearing data: ${e.message}"
+                    message = "Error: ${e.message}"
                 )
-                Logger.e("Error clearing data", e, "MainScreenViewModel")
             }
         }
     }

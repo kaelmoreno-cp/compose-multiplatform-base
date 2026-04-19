@@ -7,7 +7,6 @@ import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 val presentationModule = module {
-    // ViewModels - scoped to the component lifecycle
     viewModel { MainScreenViewModel(get()) }
     viewModel { UserViewModel(get()) }
     viewModel { PostsViewModel(get()) }
