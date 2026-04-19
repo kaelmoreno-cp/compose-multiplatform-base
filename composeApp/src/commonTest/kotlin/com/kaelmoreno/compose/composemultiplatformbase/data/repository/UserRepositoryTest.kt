@@ -56,7 +56,8 @@ class UserRepositoryTest {
             User(id = 1, name = "Test", username = null, email = null, phone = null, website = null, address = null, company = null)
         )
         val response = ResponseHandler.Success(users)
-        assertNotNull(response.result)
-        assertEquals(1, response.result?.size)
+        val result = response.result
+        assertNotNull(result)
+        assertEquals(1, result.size)
     }
 }

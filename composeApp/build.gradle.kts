@@ -9,7 +9,6 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.room)
     alias(libs.plugins.skie)
-    alias(libs.plugins.kover)
 }
 
 kotlin {
