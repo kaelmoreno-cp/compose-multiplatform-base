@@ -38,34 +38,63 @@ Android SDK must be at `E:\Dev\Android\SDK` — `local.properties` with `sdk.dir
 
 | Layer | Location | Purpose |
 |-------|----------|---------|
-| Navigation | `navigation/` | Type-safe sealed class routes (`Screen.Main`, `Screen.Users`, `Screen.Posts`) with kotlinx.serialization |
-| Presentation | `presentation/viewmodel/` | MVVM — `BaseViewModel` provides loading/error/success state management; concrete VMs expose `StateFlow<UiState>` |
-| Presentation | `presentation/screen/` | Compose screens consuming VM state via `collectAsStateWithLifecycle()` |
-| Presentation | `presentation/defaults/` | `BaseContent` composable handles Loading/Error/Empty/Success rendering |
-| Data | `data/network/` | Ktor `HttpClient` with JSON serialization, Napier logging, 60s timeout. `enqueue<T>()` returns `Flow<ResponseHandler<T>>` |
-| Data | `data/repository/` | `DataStoreRepository` (plain) and `EncryptedDataStoreRepository` (AES on Android, no-op on iOS) |
-| Data | `data/model/` | `@Serializable` data classes (User, Post, etc.) |
-| DI | `di/` | Koin modules split by layer: `dataModule`, `presentationModule`, `platformModule` (expect/actual) |
+| Navigation | `navigation/` | Type-safe sealed class routes with auth gating |
+| Auth | `auth/` | `AuthManager` + `AuthState` sealed interface for auth plumbing |
+| Presentation | `presentation/viewmodel/` | MVVM — `BaseViewModel<T>` manages single `StateFlow<UiState<T>>`; VMs without data type extend `ViewModel()` directly |
+| Presentation | `presentation/screen/` | Compose screens consuming `UiState` via `collectAsStateWithLifecycle()` |
+| Presentation | `presentation/defaults/` | `BaseContent` composable handles `UiState` rendering (Loading/Error/Empty/Success) |
+| Data | `data/network/` | Ktor `HttpClient` with Auth plugin, Kermit logging. `enqueue<T>()` returns `Flow<ResponseHandler<T>>` |
+| Data | `data/network/datasource/` | `RemoteDataSource` wraps `ApiService` |
+| Data | `data/network/model/` | `@Serializable` API models (User, Post, etc.) |
+| Data | `data/local/database/` | Room KMP — `AppDatabase`, DAOs, entities |
+| Data | `data/local/database/datasource/` | `LocalDataSource` wraps Room DAOs |
+| Data | `data/local/preferences/` | `DataStoreRepository` and `EncryptedDataStoreRepository` |
+| Data | `data/repository/` | `UserRepository` — orchestrates remote + local data |
+| Data | `data/mapper/` | `UserMapper` — entity <-> domain model conversion |
+| DI | `di/` | Koin modules: `dataModule`, `presentationModule`, `platformModule` (expect/actual) |
+| UI | `ui/theme/` | `AppThemeConfig`, `Dimensions`, `AppTheme` composable with `CompositionLocal` |
+| UI | `ui/components/` | Reusable components: `AppButton`, `AppCard`, `AppTopBar`, `AppDialog`, etc. |
 
 ### Platform Abstractions (expect/actual)
 
-- **`Platform`** interface — device info (UDID, OS, model, app version). Implementations in `androidMain`/`iosMain`.
+- **`Platform`** interface — device info (UDID, OS, model, app version).
 - **`DataStoreFactory`** — creates platform-specific `DataStore<Preferences>`.
-- **`EncryptionService`** — Android uses AES/CBC with AndroidKeyStore; iOS is a placeholder.
+- **`DatabaseFactory`** — creates platform-specific `RoomDatabase.Builder`.
+- **`EncryptionService`** — Android: AES/CBC with AndroidKeyStore; iOS: Base64 encoding.
 - **`platformModule`** — Koin module providing platform-specific bindings.
 
 ### Key Patterns
 
-- **ResponseHandler** sealed class: `Loading`, `Success(data)`, `Error(apiError)`, `Failure(exception)` — used throughout network layer.
-- **BaseViewModel.executeOperationWithFlow()** — collects a `Flow<ResponseHandler<T>>` and auto-manages loading/error state.
+- **UiState<T>** sealed interface: `Loading`, `Success(data)`, `Error(message)`, `Empty`.
+- **BaseViewModel<T>** — single `StateFlow<UiState<T>>` with `execute(flow)` for automatic state management.
+- **ResponseHandler** sealed class: `Loading`, `Success(data)`, `Error(apiError)`, `Failure(exception)`.
+- **Repository pattern** — cache-first strategy: emit cached → fetch remote → cache → emit fresh.
+- **Auth plumbing** — `AuthManager` manages auth state; Ktor Auth plugin handles bearer tokens.
 - API base URL: `https://jsonplaceholder.typicode.com` (configured in `HttpConstants.kt`).
-- Theme: GitHub-inspired Material 3 color scheme in `ui/theme/GitHubColorScheme.kt`.
-- Logging: Napier singleton wrapper in `Logger.kt`.
+- Theme: Configurable `AppThemeConfig` with neutral defaults. Each project re-skins via config.
+- Logging: Kermit (Touchlab) singleton wrapper in `Logger.kt`.
+
+### Feature Flow Pattern
+
+```
+API → RemoteDataSource → Repository → ViewModel → Screen
+                              ↕
+         Room (DAO) → LocalDataSource
+```
+
+New features need: entity + DAO + remote data source + repository + mapper + ViewModel + screen.
 
 ## Dependencies (version catalog: `gradle/libs.versions.toml`)
 
-Kotlin 2.3.10, Compose Multiplatform 1.10.1, AGP 9.1.0, Ktor 3.4.1, Koin 4.1.1, kotlinx-serialization 1.10.0, DataStore 1.2.0, Navigation 2.9.0, Napier 2.7.1.
+Kotlin 2.3.10, Compose Multiplatform 1.10.1, AGP 9.1.0, Ktor 3.4.1 (with Auth plugin), Koin 4.1.1, kotlinx-serialization 1.10.0, DataStore 1.2.0, Navigation 2.9.0, Room KMP 2.7.1, Kermit 2.0.5, Coil 3.2.0, SKIE 0.10.1, Turbine 1.2.0, Kover 0.9.1.
+
+## Testing
+
+Tests use fakes (not mocks) for cross-platform compatibility. Test utilities:
+- `FakeApiService`, `FakeUserDao`, `FakeAuthManager` in `commonTest/fake/`
+- Turbine for Flow assertions
+- kotlinx-coroutines-test for ViewModel testing
 
 ## iOS Integration
 
-iOS framework is `ComposeApp` (static). Entry: `MainViewController.kt` returns `ComposeUIViewController { App() }`. Koin init exposed via `KoinIOS.kt` → called from Swift as `KoinIOSKt.doInitKoin()`.
+iOS framework is `ComposeApp` (static). SKIE plugin bridges Kotlin Flows to Swift async/await. Entry: `MainViewController.kt` returns `ComposeUIViewController { App() }`. Koin init exposed via `KoinIOS.kt` → called from Swift as `KoinIOSKt.doInitKoin()`.
