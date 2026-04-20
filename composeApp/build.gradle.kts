@@ -6,6 +6,9 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinx.serialization)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.room)
+    alias(libs.plugins.skie)
 }
 
 kotlin {
@@ -46,12 +49,14 @@ kotlin {
             implementation(compose.components.uiToolingPreview)
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
-            implementation(libs.napier)
 
-            // Navigation dependency
+            // Logging
+            implementation(libs.kermit)
+
+            // Navigation
             implementation(libs.androidx.navigation.compose)
 
-            // Material Icons Extended (required for Compose Multiplatform)
+            // Material Icons Extended
             implementation(compose.materialIconsExtended)
 
             // Ktor dependencies
@@ -59,6 +64,7 @@ kotlin {
             implementation(libs.ktor.client.content.negotiation)
             implementation(libs.ktor.serialization.kotlinx.json)
             implementation(libs.ktor.client.logging)
+            implementation(libs.ktor.client.auth)
 
             // Kotlinx dependencies
             implementation(libs.kotlinx.coroutines.core)
@@ -68,21 +74,39 @@ kotlin {
             implementation(libs.koin.core)
             implementation(libs.koin.compose.viewmodel)
 
-            // commonMain
-            implementation(libs.ksafe)
-            implementation(libs.ksafe.compose) // ← Compose state (optional)
-
-            // DataStore library
+            // DataStore
             implementation(libs.androidx.datastore)
-            // The Preferences DataStore library
             implementation(libs.androidx.datastore.preferences)
 
+            // Room
+            implementation(libs.room.runtime)
+            implementation(libs.sqlite.bundled)
+
+            // Image loading
+            implementation(libs.coil.compose)
+            implementation(libs.coil.network.ktor)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
+            implementation(libs.kotlinx.coroutines.test)
+            implementation(libs.turbine)
         }
     }
+}
+
+dependencies {
+    listOf(
+        "kspAndroid",
+        "kspIosArm64",
+        "kspIosSimulatorArm64"
+    ).forEach { target ->
+        add(target, libs.room.compiler)
+    }
+}
+
+room {
+    schemaDirectory("$projectDir/schemas")
 }

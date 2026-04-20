@@ -13,7 +13,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun EmptyContent(onRefresh: () -> Unit) {
+fun EmptyContent(
+    message: String = "No data found",
+    onRefresh: () -> Unit
+) {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -21,7 +24,7 @@ fun EmptyContent(onRefresh: () -> Unit) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("No users found")
+            Text(message)
             Spacer(modifier = Modifier.height(16.dp))
             Button(onClick = onRefresh) {
                 Text("Refresh")

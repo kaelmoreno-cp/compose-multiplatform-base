@@ -1,4 +1,4 @@
-package com.kaelmoreno.compose.composemultiplatformbase.data.model
+package com.kaelmoreno.compose.composemultiplatformbase.data.network.model
 
 import kotlinx.serialization.Serializable
 
